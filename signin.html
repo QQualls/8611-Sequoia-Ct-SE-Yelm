@@ -159,7 +159,7 @@
     var b=this.querySelector('button[type="submit"]'); b.disabled=true; b.textContent='Signing in…';
   });
 </script>
-<!-- lead-backup: send via FormSubmit; if it fails, offer a prefilled text to Quincy -->
+<!-- lead-backup: send to Google Form (+FormSubmit copy); if it fails, offer a prefilled text to Quincy -->
 <script>
 (function(){
   var PHONE = '+13608702605', PHONE_DISPLAY = '360-870-2605';
@@ -210,7 +210,7 @@
     resetBtn(form, label);
     var body = encodeURIComponent(summary(form));
     panel(form, 'lb-fail',
-      '<strong>Our form service is having trouble right now.</strong>'
+      '<strong>We couldn&rsquo;t send your info.</strong>'
       + 'Your info didn&rsquo;t go through. Tap below to text it straight to Quincy &mdash; it&rsquo;s already filled in.'
       + '<a class="lb-btn" href="sms:' + PHONE + '?&body=' + body + '">Text My Info to Quincy</a>'
       + '<a class="lb-btn alt" href="tel:' + PHONE + '">Or call ' + PHONE_DISPLAY + '</a>');
@@ -224,16 +224,21 @@
       var hp = form.querySelector('input[name="_honey"]');
       if (hp && hp.value) return;
       if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
-      var url = form.action.replace('formsubmit.co/', 'formsubmit.co/ajax/');
+      var GF = 'https://docs.google.com/forms/d/e/1FAIpQLScDSVl6E_V1IThUHmYbsmqCIGQt1deNTn6trSXxeeQw6144Dg/formResponse';
+      var fd = new FormData(form), gd = new URLSearchParams(), extra = [];
+      var known = { 'Name':'entry.343045160', 'Phone':'entry.385700030', 'Email':'entry.552040102' };
+      gd.append('entry.1287234132', (form.querySelector('input[name="_subject"]') || {}).value || location.pathname);
+      fd.forEach(function(v, k){
+        if (k.charAt(0) === '_' || typeof v !== 'string' || !v.trim()) return;
+        if (known[k]) gd.append(known[k], v.trim()); else extra.push(k + ': ' + v.trim());
+      });
+      gd.append('entry.1675812287', extra.join('\n') + '\nPage: ' + location.href);
+      // Best-effort email copy via FormSubmit (ignored if it is down)
+      try { fetch(form.action.replace('formsubmit.co/', 'formsubmit.co/ajax/'), { method:'POST', body:fd, headers:{ 'Accept':'application/json' } }).catch(function(){}); } catch(e) {}
       var ctrl = ('AbortController' in window) ? new AbortController() : null;
       var timer = setTimeout(function(){ if (ctrl) ctrl.abort(); }, 12000);
-      fetch(url, { method:'POST', body:new FormData(form), headers:{ 'Accept':'application/json' }, signal: ctrl ? ctrl.signal : undefined })
-        .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ return { ok:r.ok, j:j }; }); })
-        .then(function(res){
-          clearTimeout(timer);
-          var s = res.j && res.j.success;
-          if (res.ok && s !== false && s !== 'false') onSuccess(form, label); else onFail(form, label);
-        })
+      fetch(GF, { method:'POST', mode:'no-cors', body:gd, signal: ctrl ? ctrl.signal : undefined })
+        .then(function(){ clearTimeout(timer); onSuccess(form, label); })
         .catch(function(){ clearTimeout(timer); onFail(form, label); });
     });
   });
