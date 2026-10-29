@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://qqualls.github.io/8611-Sequoia-Ct-SE-Yelm/sitemap.xml
