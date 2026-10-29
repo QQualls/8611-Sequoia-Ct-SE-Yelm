@@ -159,5 +159,86 @@
     var b=this.querySelector('button[type="submit"]'); b.disabled=true; b.textContent='Signing in…';
   });
 </script>
+<!-- lead-backup: send via FormSubmit; if it fails, offer a prefilled text to Quincy -->
+<script>
+(function(){
+  var PHONE = '+13608702605', PHONE_DISPLAY = '360-870-2605';
+  var css = '.lb-panel{margin-top:16px;padding:16px;border-radius:8px;font-size:14.5px;line-height:1.5;text-align:center}'
+    + '.lb-ok{background:#eaf5ec;border:1px solid #b7ddc0;color:#245c32}'
+    + '.lb-fail{background:#fff6e6;border:1px solid #e9c98a;color:#5a4214}'
+    + '.lb-fail strong{display:block;font-size:15.5px;margin-bottom:6px;color:#3d2c0c}'
+    + '.lb-btn{display:block;margin:12px auto 0;max-width:320px;padding:14px 16px;border-radius:8px;font-weight:bold;font-size:15.5px;text-decoration:none;background:#2f4a3c;color:#fff}'
+    + '.lb-btn.alt{background:#fff;color:#2f4a3c;border:1px solid #2f4a3c;margin-top:8px;font-size:14px;padding:11px 14px}';
+  var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+
+  function summary(form){
+    var subj = (form.querySelector('input[name="_subject"]') || {}).value || 'Website lead';
+    var lines = [subj];
+    var fd = new FormData(form);
+    fd.forEach(function(v, k){
+      if (k.charAt(0) === '_' || typeof v !== 'string' || !v.trim()) return;
+      lines.push(k + ': ' + v.trim());
+    });
+    return lines.join('\n');
+  }
+
+  function panel(form, cls, html){
+    var old = form.parentNode.querySelector('.lb-panel'); if (old) old.remove();
+    var d = document.createElement('div'); d.className = 'lb-panel ' + cls; d.setAttribute('role', 'status'); d.innerHTML = html;
+    form.parentNode.insertBefore(d, form.nextSibling);
+    d.scrollIntoView({behavior:'smooth', block:'center'});
+    return d;
+  }
+
+  function resetBtn(form, label){
+    var b = form.querySelector('button[type="submit"]');
+    if (b) { b.disabled = false; b.textContent = label; }
+  }
+
+  function onSuccess(form, label){
+    if (form.id === 'signInForm') {
+      var fc = document.getElementById('formCard'), tc = document.getElementById('thanksCard');
+      if (fc && tc) { fc.style.display = 'none'; tc.style.display = 'block'; window.scrollTo(0, 0); return; }
+    }
+    form.reset(); resetBtn(form, label);
+    var t = document.getElementById('thanks');
+    if (t && form.contains(t)) { t.classList.add('show'); t.style.display = 'block'; return; }
+    panel(form, 'lb-ok', 'Thanks! Your info is on its way to Quincy.');
+  }
+
+  function onFail(form, label){
+    resetBtn(form, label);
+    var body = encodeURIComponent(summary(form));
+    panel(form, 'lb-fail',
+      '<strong>Our form service is having trouble right now.</strong>'
+      + 'Your info didn&rsquo;t go through. Tap below to text it straight to Quincy &mdash; it&rsquo;s already filled in.'
+      + '<a class="lb-btn" href="sms:' + PHONE + '?&body=' + body + '">Text My Info to Quincy</a>'
+      + '<a class="lb-btn alt" href="tel:' + PHONE + '">Or call ' + PHONE_DISPLAY + '</a>');
+  }
+
+  document.querySelectorAll('form[action*="formsubmit.co/"]').forEach(function(form){
+    var btn = form.querySelector('button[type="submit"]');
+    var label = btn ? btn.textContent : 'Submit';
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var hp = form.querySelector('input[name="_honey"]');
+      if (hp && hp.value) return;
+      if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+      var url = form.action.replace('formsubmit.co/', 'formsubmit.co/ajax/');
+      var ctrl = ('AbortController' in window) ? new AbortController() : null;
+      var timer = setTimeout(function(){ if (ctrl) ctrl.abort(); }, 12000);
+      fetch(url, { method:'POST', body:new FormData(form), headers:{ 'Accept':'application/json' }, signal: ctrl ? ctrl.signal : undefined })
+        .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ return { ok:r.ok, j:j }; }); })
+        .then(function(res){
+          clearTimeout(timer);
+          var s = res.j && res.j.success;
+          if (res.ok && s !== false && s !== 'false') onSuccess(form, label); else onFail(form, label);
+        })
+        .catch(function(){ clearTimeout(timer); onFail(form, label); });
+    });
+  });
+})();
+</script>
+<!-- /lead-backup -->
 </body>
 </html>
